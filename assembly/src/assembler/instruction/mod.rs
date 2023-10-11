@@ -4,7 +4,7 @@ use super::{
 };
 use crate::utils::bound_into_included_u64;
 use core::ops::RangeBounds;
-use vm_core::{Decorator, FieldElement, StarkField};
+use vm_core::{DebugOptions, Decorator, FieldElement, StarkField};
 
 mod adv_ops;
 mod crypto_ops;
@@ -339,7 +339,7 @@ impl Assembler {
 
             Instruction::Debug(options) => {
                 if self.in_debug_mode() {
-                    span.push_decorator(Decorator::Debug(*options))
+                    span.push_decorator(process_debug_options(ctx, options)?)
                 }
                 Ok(None)
             }
@@ -407,4 +407,42 @@ where
             bound_into_included_u64(range.end_bound(), false),
         )
     })
+}
+
+/// Returns a [Decorator::Debug] created with provided information and procedure context.
+///
+/// This function is used to create a [DebugOptions] instance based on information about number of
+/// procedure locals from the procedure context.
+fn process_debug_options(
+    ctx: &AssemblyContext,
+    options: &DebugOptions,
+) -> Result<Decorator, AssemblyError> {
+    let num_locals = ctx.num_proc_locals() as u32;
+    match options {
+        DebugOptions::LocalIndex(n) => {
+            if *n >= num_locals {
+                return Err(AssemblyError::ParsingError(format!(
+                    "Local addres should be less than {}, but {} was provided",
+                    num_locals, n
+                )));
+            }
+            Ok(Decorator::Debug(*options))
+        }
+        DebugOptions::LocalInterval(_, m, print_all) => {
+            if *print_all {
+                let locals_all = DebugOptions::LocalInterval(0, num_locals - 1, true);
+                Ok(Decorator::Debug(locals_all))
+            } else {
+                if *m >= num_locals {
+                    return Err(AssemblyError::ParsingError(format!("The index of the end of the interval should be less than {}, but {} was provided", num_locals, m)));
+                }
+                Ok(Decorator::Debug(*options))
+            }
+        }
+        DebugOptions::All(_) => {
+            let all = DebugOptions::All(ctx.num_proc_locals());
+            Ok(Decorator::Debug(all))
+        }
+        _ => Ok(Decorator::Debug(*options)),
+    }
 }

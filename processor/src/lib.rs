@@ -551,6 +551,11 @@ pub trait ProcessState {
     /// Returns a word located at the specified context/address, or None if the address hasn't
     /// been accessed previously.
     fn get_mem_value(&self, ctx: u32, addr: u32) -> Option<Word>;
+
+    /// Returns the entire memory state for the specified execution context at the current clock
+    /// cycle. The state is returned as a vector of (address, value) tuples, and includes addresses
+    /// which have been accessed at least once.
+    fn get_mem(&self, ctx: u32) -> Vec<(u64, Word)>;
 }
 
 impl<H: Host> ProcessState for Process<H> {
@@ -576,6 +581,10 @@ impl<H: Host> ProcessState for Process<H> {
 
     fn get_mem_value(&self, ctx: u32, addr: u32) -> Option<Word> {
         self.chiplets.get_mem_value(ctx, addr)
+    }
+
+    fn get_mem(&self, ctx: u32) -> Vec<(u64, Word)> {
+        self.chiplets.get_mem_state_at(ctx, self.system.clk())
     }
 }
 
