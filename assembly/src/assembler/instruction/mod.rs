@@ -419,28 +419,20 @@ fn process_debug_options(
 ) -> Result<Decorator, AssemblyError> {
     let num_locals = ctx.num_proc_locals() as u32;
     match options {
-        DebugOptions::LocalIndex(n) => {
-            if *n >= num_locals {
-                return Err(AssemblyError::ParsingError(format!(
-                    "Local addres should be less than {}, but {} was provided",
-                    num_locals, n
-                )));
-            }
-            Ok(Decorator::Debug(*options))
-        }
-        DebugOptions::LocalInterval(_, m, print_all) => {
+        DebugOptions::LocalInterval(interval, _, print_all) => {
             if *print_all {
-                let locals_all = DebugOptions::LocalInterval(0, num_locals - 1, true);
+                let locals_all = DebugOptions::LocalInterval((0, num_locals - 1), num_locals, true);
                 Ok(Decorator::Debug(locals_all))
             } else {
-                if *m >= num_locals {
-                    return Err(AssemblyError::ParsingError(format!("The index of the end of the interval should be less than {}, but {} was provided", num_locals, m)));
+                if interval.1 >= num_locals {
+                    return Err(AssemblyError::ParsingError(format!("The index of the end of the interval should be less than {}, but {} was provided", num_locals, interval.1)));
                 }
-                Ok(Decorator::Debug(*options))
+                let locals_interval = DebugOptions::LocalInterval(*interval, num_locals, false);
+                Ok(Decorator::Debug(locals_interval))
             }
         }
         DebugOptions::All(_) => {
-            let all = DebugOptions::All(ctx.num_proc_locals());
+            let all = DebugOptions::All(num_locals);
             Ok(Decorator::Debug(all))
         }
         _ => Ok(Decorator::Debug(*options)),

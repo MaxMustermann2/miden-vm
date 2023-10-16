@@ -529,6 +529,9 @@ pub trait ProcessState {
     /// Returns the current execution context ID.
     fn ctx(&self) -> u32;
 
+    /// Returns the current value of the free memory pointer.
+    fn fmp(&self) -> u64;
+
     /// Returns the value located at the specified position on the stack at the current clock cycle.
     fn get_stack_item(&self, pos: usize) -> Felt;
 
@@ -555,7 +558,7 @@ pub trait ProcessState {
     /// Returns the entire memory state for the specified execution context at the current clock
     /// cycle. The state is returned as a vector of (address, value) tuples, and includes addresses
     /// which have been accessed at least once.
-    fn get_mem(&self, ctx: u32) -> Vec<(u64, Word)>;
+    fn get_mem_state(&self, ctx: u32) -> Vec<(u64, Word)>;
 }
 
 impl<H: Host> ProcessState for Process<H> {
@@ -565,6 +568,10 @@ impl<H: Host> ProcessState for Process<H> {
 
     fn ctx(&self) -> u32 {
         self.system.ctx()
+    }
+
+    fn fmp(&self) -> u64 {
+        self.system.fmp().as_int()
     }
 
     fn get_stack_item(&self, pos: usize) -> Felt {
@@ -583,7 +590,7 @@ impl<H: Host> ProcessState for Process<H> {
         self.chiplets.get_mem_value(ctx, addr)
     }
 
-    fn get_mem(&self, ctx: u32) -> Vec<(u64, Word)> {
+    fn get_mem_state(&self, ctx: u32) -> Vec<(u64, Word)> {
         self.chiplets.get_mem_state_at(ctx, self.system.clk())
     }
 }
