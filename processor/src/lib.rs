@@ -556,8 +556,10 @@ pub trait ProcessState {
     fn get_mem_value(&self, ctx: u32, addr: u32) -> Option<Word>;
 
     /// Returns the entire memory state for the specified execution context at the current clock
-    /// cycle. The state is returned as a vector of (address, value) tuples, and includes addresses
-    /// which have been accessed at least once.
+    /// cycle.
+    ///
+    /// The state is returned as a vector of (address, value) tuples, and includes addresses which
+    /// have been accessed at least once.
     fn get_mem_state(&self, ctx: u32) -> Vec<(u64, Word)>;
 }
 

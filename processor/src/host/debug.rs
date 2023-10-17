@@ -1,6 +1,6 @@
 use super::ProcessState;
 use crate::Vec;
-use vm_core::{DebugOptions, Word};
+use vm_core::{utils::string::ToString, DebugOptions, StarkField, Word};
 
 // DEBUG HANDLER
 // ================================================================================================
@@ -21,18 +21,8 @@ pub fn print_debug_info<S: ProcessState>(process: &S, options: &DebugOptions) {
         DebugOptions::MemInterval(n, m) => {
             printer.print_mem_interval(process, *n, *m);
         }
-        DebugOptions::LocalInterval((n, m), num_locals, print_all) => {
-            printer.print_local_interval(process, (*n, *m), *num_locals, *print_all);
-        }
-        DebugOptions::All(num_locals) => {
-            // print stack
-            printer.print_vm_stack(process, None);
-
-            // print memory
-            printer.print_mem_all(process);
-
-            // print locals
-            printer.print_local_interval(process, (0, 0), *num_locals - 1, true);
+        DebugOptions::LocalInterval(n, m, num_locals) => {
+            printer.print_local_interval(process, (*n, *m), *num_locals);
         }
     }
 }
@@ -81,26 +71,22 @@ impl Printer {
     /// Prints the whole memory state at the cycle `clk` in context `ctx`.
     fn print_mem_all<S: ProcessState>(&self, process: &S) {
         let mem = process.get_mem_state(self.ctx);
+        let padding = mem.iter().fold(0, |max, value| word_elem_max_len(Some(value.1)).max(max));
 
         println!("Memory state before step {} for the context {}:", self.clk, self.ctx);
 
         // print the main part of the memory (wihtout the last value)
         for (addr, value) in mem.iter().take(mem.len() - 1) {
-            print_word(*addr as u32, value, false);
+            print_mem_address(*addr as u32, Some(*value), false, false, padding);
         }
 
         // print the last memory value
         if let Some((addr, value)) = mem.last() {
-            print_word(*addr as u32, value, true);
-        } else {
-            println!("└── EMPTY\n");
+            print_mem_address(*addr as u32, Some(*value), true, false, padding);
         }
     }
 
     /// Prints memory values in the provided addresses interval.
-    ///
-    /// `header` contains a title message corresponding to the DebugOption it is used in
-    /// ([DebugOptions::MemInterval] or [DebugOptions::LocalInterval]).
     fn print_mem_interval<S: ProcessState>(&self, process: &S, n: u32, m: u32) {
         let mut mem_interval = Vec::new();
         for addr in n..m + 1 {
@@ -119,28 +105,31 @@ impl Printer {
             )
         };
 
-        print_interval(mem_interval);
+        print_interval(mem_interval, false);
     }
 
-    /// Prints locals in provided interval.
-    ///
-    /// If `print_all` is true, the interval should contain all indexes of locals available for the
-    /// current procedure.
+    /// Prints locals in provided indexes interval.
     fn print_local_interval<S: ProcessState>(
         &self,
         process: &S,
         interval: (u32, u32),
         num_locals: u32,
-        print_all: bool,
     ) {
         let mut local_mem_interval = Vec::new();
         let local_memory_offset = self.fmp - num_locals + 1;
-        for index in interval.0..interval.1 + 1 {
+
+        // in case start index is 0 and end index is 2^16, we should print all available locals.
+        let (start, end) = if interval.0 == 0 && interval.1 == 2u32.pow(16) {
+            (0, num_locals - 1)
+        } else {
+            interval
+        };
+        for index in start..end + 1 {
             local_mem_interval
                 .push((index, process.get_mem_value(self.ctx, index + local_memory_offset)))
         }
 
-        if print_all {
+        if interval.0 == 0 && interval.1 == 2u32.pow(16) {
             println!("Local state before step {} for the context {}:", self.clk, self.ctx)
         } else if interval.0 == interval.1 {
             println!(
@@ -154,40 +143,100 @@ impl Printer {
             )
         };
 
-        print_interval(local_mem_interval);
+        print_interval(local_mem_interval, true);
     }
 }
 
-fn print_interval(mem_interval: Vec<(u32, Option<Word>)>) {
+// HELPER FUNCTIONS
+// ================================================================================================
+
+/// Prints the provided memory interval.
+///
+/// If `is_local` is true, the output addresses are formatted as decimal values, otherwise as hex
+/// strings.
+fn print_interval(mem_interval: Vec<(u32, Option<Word>)>, is_local: bool) {
+    let padding = mem_interval.iter().fold(0, |max, value| word_elem_max_len(value.1).max(max));
+
     // print the main part of the memory (wihtout the last value)
     for (addr, value) in mem_interval.iter().take(mem_interval.len() - 1) {
-        if let Some(value) = value {
-            print_word(*addr, value, false);
-        } else {
-            println!("├── {addr:.<10}: EMPTY");
-        }
+        print_mem_address(*addr, *value, false, is_local, padding)
     }
 
     // print the last memory value
     if let Some((addr, value)) = mem_interval.last() {
-        if let Some(value) = value {
-            print_word(*addr, value, true);
-        } else {
-            println!("└── {addr:.<10}: EMPTY\n");
-        }
-    } else {
-        println!("└── EMPTY\n");
+        print_mem_address(*addr, *value, true, is_local, padding);
     }
 }
 
-fn print_word(addr: u32, value: &Word, last: bool) {
-    if last {
-        print!("└── ");
+/// Prints single memory value with its address.
+///
+/// If `is_local` is true, the output address is formatted as decimal value, otherwise as hex
+/// string.
+fn print_mem_address(
+    addr: u32,
+    value: Option<Word>,
+    is_last: bool,
+    is_local: bool,
+    padding: usize,
+) {
+    if let Some(value) = value {
+        if is_last {
+            if is_local {
+                println!(
+                    "└── {addr:>5}: [{:>width$}, {:>width$}, {:>width$}, {:>width$}]\n",
+                    value[0].as_int(),
+                    value[1].as_int(),
+                    value[2].as_int(),
+                    value[3].as_int(),
+                    width = padding
+                )
+            } else {
+                println!(
+                    "└── {addr:#010x}: [{:>width$}, {:>width$}, {:>width$}, {:>width$}]\n",
+                    value[0].as_int(),
+                    value[1].as_int(),
+                    value[2].as_int(),
+                    value[3].as_int(),
+                    width = padding
+                )
+            }
+        } else if is_local {
+            println!(
+                "├── {addr:>5}: [{:>width$}, {:>width$}, {:>width$}, {:>width$}]",
+                value[0].as_int(),
+                value[1].as_int(),
+                value[2].as_int(),
+                value[3].as_int(),
+                width = padding
+            )
+        } else {
+            println!(
+                "├── {addr:#010x}: [{:>width$}, {:>width$}, {:>width$}, {:>width$}]",
+                value[0].as_int(),
+                value[1].as_int(),
+                value[2].as_int(),
+                value[3].as_int(),
+                width = padding
+            )
+        }
+    } else if is_last {
+        if is_local {
+            println!("└── {addr:>5}: EMPTY\n");
+        } else {
+            println!("└── {addr:#010x}: EMPTY\n");
+        }
+    } else if is_local {
+        println!("├── {addr:>5}: EMPTY");
     } else {
-        print!("├── ");
+        println!("├── {addr:#010x}: EMPTY");
     }
-    println!("{addr:.<10}: [{}, {}, {}, {}]", value[0], value[1], value[2], value[3],);
-    if last {
-        println!();
+}
+
+/// Returns the maximum length among the word elements.
+fn word_elem_max_len(word: Option<Word>) -> usize {
+    if let Some(word) = word {
+        word.iter().fold(0, |max, value| value.as_int().to_string().len().max(max))
+    } else {
+        0
     }
 }

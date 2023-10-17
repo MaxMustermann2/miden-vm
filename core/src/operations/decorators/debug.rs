@@ -17,14 +17,15 @@ pub enum DebugOptions {
     MemAll,
     /// Prints out the contents of memory stored in the provided interval. Interval boundaries are
     /// both inclusive.
+    ///
+    /// First parameter specifies the interval starting address, second -- the ending address.
     MemInterval(u32, u32),
     /// Prints out locals stored in the provided interval of the currently executing procedure.
     /// Interval boundaries are both inclusive.
     ///
-    /// Boolean parameter indicated whether whole local memory should be printed.
-    LocalInterval((u32, u32), u32, bool),
-    /// Prints out the entire state of the VM (stack and RAM).
-    All(u32),
+    /// First parameter specifies the starting address, second -- the ending address, and the third
+    /// specifies the overall number of locals.
+    LocalInterval(u32, u32, u32),
 }
 
 impl fmt::Display for DebugOptions {
@@ -34,14 +35,9 @@ impl fmt::Display for DebugOptions {
             Self::StackTop(n) => write!(f, "stack.{n}"),
             Self::MemAll => write!(f, "mem"),
             Self::MemInterval(n, m) => write!(f, "mem.{n}.{m}"),
-            Self::LocalInterval(interval, _, print_all) => {
-                if *print_all {
-                    write!(f, "local")
-                } else {
-                    write!(f, "local.{}.{}", interval.0, interval.1)
-                }
+            Self::LocalInterval(start, end, _) => {
+                write!(f, "local.{start}.{end}")
             }
-            Self::All(_) => write!(f, "all"),
         }
     }
 }

@@ -1,26 +1,3 @@
-proc.foo.3
-    push.11
-    loc_store.0
-    push.101
-    loc_store.1
-
-    push.10.1
-    mem_store
-    push.1.2.3.4.1000
-    mem_storew
-    debug.all
-
-    debug.mem.1000
-    debug.mem.1001
-    debug.mem.999.1002
-    debug.mem
-
-    debug.local
-    debug.local.1
-    debug.local.0.1
-
-end
-
 begin
     # push the root of the Partial Merkle Tree on the stack
     push.0x82bb4d9a8e93582f1387611949703eecd8e4c74b904880f9c9c85f1fc1d7576d
@@ -55,8 +32,6 @@ begin
     # check that returned value is equal to 22
     push.22.0.0.0
     assert_eqw
-
-    exec.foo
 
     dropw
 

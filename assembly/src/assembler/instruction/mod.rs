@@ -409,31 +409,16 @@ where
     })
 }
 
-/// Returns a [Decorator::Debug] created with provided information and procedure context.
-///
-/// This function is used to create a [DebugOptions] instance based on information about number of
-/// procedure locals from the procedure context.
+/// Returns a [Decorator::Debug] instance created with information about number of procedure
+/// locals.
 fn process_debug_options(
     ctx: &AssemblyContext,
     options: &DebugOptions,
 ) -> Result<Decorator, AssemblyError> {
     let num_locals = ctx.num_proc_locals() as u32;
     match options {
-        DebugOptions::LocalInterval(interval, _, print_all) => {
-            if *print_all {
-                let locals_all = DebugOptions::LocalInterval((0, num_locals - 1), num_locals, true);
-                Ok(Decorator::Debug(locals_all))
-            } else {
-                if interval.1 >= num_locals {
-                    return Err(AssemblyError::ParsingError(format!("The index of the end of the interval should be less than {}, but {} was provided", num_locals, interval.1)));
-                }
-                let locals_interval = DebugOptions::LocalInterval(*interval, num_locals, false);
-                Ok(Decorator::Debug(locals_interval))
-            }
-        }
-        DebugOptions::All(_) => {
-            let all = DebugOptions::All(num_locals);
-            Ok(Decorator::Debug(all))
+        DebugOptions::LocalInterval(start, end, _) => {
+            Ok(Decorator::Debug(DebugOptions::LocalInterval(*start, *end, num_locals)))
         }
         _ => Ok(Decorator::Debug(*options)),
     }
